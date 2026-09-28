@@ -40,10 +40,12 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   const first = p.locator('.ex').first();
   await first.locator('.cell input').nth(0).fill('22,5');
   await first.locator('.cell input').nth(1).fill('8');
-  await first.locator('.steps button').nth(5).click(); // RIR +
+  await first.locator('.rir-chips button', { hasText: /^1$/ }).first().click(); // RIR 1
   await first.locator('.done-btn').first().click();
   ok(await p.isVisible('#timer'), 'таймер запущен после подхода');
   ok(await p.locator('.set-pr').count() === 1, 'рекорд отмечен');
+  ok((await first.locator('.set-diff').first().textContent()).includes('+2,5 кг'), 'разница с прошлым разом');
+  ok(await p.isVisible('.live-clock'), 'секундомер тренировки');
   // Отмена
   await first.locator('.done-btn').nth(1).click();
   ok(await first.locator('.set.done').count() === 2, 'второй подход отмечен');
@@ -62,6 +64,15 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.click('#undo button');
   ok(await p.locator('.ex.extra').count() === 1, 'разовое возвращено отменой');
   await p.fill('.wnote textarea', 'спал 7 ч');
+  // Как в прошлый раз
+  await first.locator('.cell input').nth(2).fill('99');
+  await first.locator('.repeat-btn').click();
+  ok(await first.locator('.cell input').nth(2).inputValue() === '20', 'как в прошлый раз');
+  // Пропуск
+  const second = p.locator('.ex').nth(1);
+  await second.locator('button:has-text("Пропустить")').click();
+  await second.locator('.skip-pick button:has-text("занято")').click();
+  ok(await p.locator('.ex.skipped').count() === 1 && (await p.locator('.ex.skipped').textContent()).includes('занято'), 'пропуск упражнения');
   ok((await p.textContent('.timer-time')).startsWith('2:0') || (await p.textContent('.timer-time')).startsWith('1:5'), 'таймер ~2:00');
   await p.screenshot({ path: OUT + '/02-today-logged.png', fullPage: false });
   await p.reload(); await p.waitForSelector('.ex');
@@ -76,6 +87,14 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(await p.locator('.pr-chip').count() === 1, 'рекорд в истории');
   ok(await p.locator('.cal-c.on').count() >= 1, 'календарь');
   ok((await p.textContent('.hist')).includes('41 мин'), 'длительность');
+  ok((await p.textContent('.wk')).includes('Эта неделя'), 'недельная сводка');
+  await p.goto(URL + '#history/records'); await p.waitForSelector('.pr-what');
+  ok((await p.textContent('.hist')).includes('Жим гантелей'), 'лента рекордов');
+  await p.goto(URL + '#ex/incline_db'); await p.waitForSelector('.ex-hist-row');
+  ok(await p.locator('.ex-hist-row').count() === 2 && (await p.textContent('.page')).includes('скамья 30°'), 'страница упражнения');
+  await p.screenshot({ path: OUT + '/02c-exercise.png', fullPage: true });
+  await noOverflow('exercise');
+  await p.goto(URL + '#history'); await p.waitForSelector('.hist-item');
   await p.screenshot({ path: OUT + '/02b-history.png', fullPage: true });
   await noOverflow('history');
 
@@ -128,6 +147,13 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(vol['Трицепс'] === 8 && vol['Спина'] === 12 && vol['Бицепс'] === 11 && vol['Грудь'] === 8, 'объём: ' + JSON.stringify(vol));
   ok(/1\s*\/ 8/.test(await p.locator('.vol-row', { hasText: 'Грудь' }).textContent()), 'сделано/план по груди');
   await p.locator('.pex-head').first().click();
+  await p.fill('input[type=url]', 'https://example.com/video');
+  await p.goto(URL + '#ex/incline_db'); await p.waitForSelector('.ex-page-meta');
+  ok(await p.locator('.ex-page-meta a:has-text("Техника")').count() === 1, 'ссылка на технику');
+  ok(await p.locator('.ex', { hasText: 'Подтягивания' }).count() === 0, 'сегодня Верх A');
+  await p.goto(URL + '#today/upperB'); await p.waitForSelector('.ex');
+  ok((await p.locator('.ex', { hasText: 'Подтягивания' }).textContent()).includes('± кг'), 'подтягивания: свой вес');
+  await p.goto(URL + '#program'); await p.waitForSelector('.pex-head');
   await p.screenshot({ path: OUT + '/07-program.png', fullPage: true });
   await noOverflow('program');
 

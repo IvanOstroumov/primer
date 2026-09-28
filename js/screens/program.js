@@ -3,6 +3,7 @@ import { h, uid, range, restLabel, toast, WEEKDAYS_SHORT } from '../util.js';
 import { state, saveProgram, allWorkouts } from '../state.js';
 import { isoDate, weekStart, addDays, fmtDate } from '../util.js';
 import { MUSCLES, defaultProgram } from '../seed.js';
+import { KINDS } from './today.js';
 
 let openEx = null;
 let curDay = null;
@@ -81,7 +82,7 @@ function exEditor(day, ex, i, save, rerender) {
   const open = openEx === ex.id;
   const partner = ex.ssNext ? day.exercises[i + 1] : null;
   const inSS = i > 0 && day.exercises[i - 1].ssNext;
-  const summary = `${ex.sets} × ${range(ex.repMin, ex.repMax)} · RIR ${range(ex.rirMin, ex.rirMax)} · ${restLabel(ex.restMin, ex.restMax)}${ex.failLast ? ' · посл. 0–1' : ''}`;
+  const summary = `${ex.kind === 'bw' ? 'свой вес · ' : ''}${ex.sets} × ${range(ex.repMin, ex.repMax)}${ex.kind === 'time' ? ' с' : ''} · RIR ${range(ex.rirMin, ex.rirMax)} · ${restLabel(ex.restMin, ex.restMax)}${ex.failLast ? ' · посл. 0–1' : ''}`;
   const box = h('article', { class: 'pex' + (open ? ' open' : '') + (ex.ssNext ? ' ss-a' : '') + (inSS ? ' ss-b' : '') });
 
   const n = (key, label, opts = {}) => h('label', { class: 'field' }, h('span', {}, label),
@@ -106,13 +107,18 @@ function exEditor(day, ex, i, save, rerender) {
       h('label', { class: 'field' }, h('span', {}, 'Мышца'),
         h('select', { onchange: e => { ex.muscle = e.target.value; save(); rerender(); } },
           [...new Set([...MUSCLES, ex.muscle])].map(m => h('option', { value: m, selected: m === ex.muscle }, m)))),
-      h('div', { class: 'grid3' }, n('sets', 'Подходы'), n('repMin', 'Повт. от'), n('repMax', 'Повт. до')),
+      h('label', { class: 'field' }, h('span', {}, 'Тип'),
+        h('select', { onchange: e => { ex.kind = e.target.value; save(); rerender(); } },
+          KINDS.map(([k, t]) => h('option', { value: k, selected: k === (ex.kind || 'reps') }, t)))),
+      h('div', { class: 'grid3' }, n('sets', 'Подходы'), n('repMin', ex.kind === 'time' ? 'Сек от' : 'Повт. от'), n('repMax', ex.kind === 'time' ? 'Сек до' : 'Повт. до')),
       h('div', { class: 'grid3' }, n('rirMin', 'RIR от'), n('rirMax', 'RIR до'), h('span')),
       h('div', { class: 'grid3' }, n('restMin', 'Отдых от, мин', { div: 60 }), n('restMax', 'Отдых до, мин', { div: 60 }), h('span')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: ex.failLast, onchange: e => { ex.failLast = e.target.checked; save(); } }), h('span', {}, 'Последний подход можно до отказа (0–1)')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: ex.ssNext, disabled: i === day.exercises.length - 1, onchange: e => { ex.ssNext = e.target.checked; save(); rerender(); } }), h('span', {}, 'Суперсет со следующим упражнением')),
       h('label', { class: 'field' }, h('span', {}, 'Разминка (заметка)'),
         h('input', { type: 'text', value: ex.warmup || '', placeholder: 'необязательно', oninput: e => { ex.warmup = e.target.value; save(); } })),
+      h('label', { class: 'field' }, h('span', {}, 'Ссылка на технику (видео/фото)'),
+        h('input', { type: 'url', inputmode: 'url', value: ex.url || '', placeholder: 'https://…', oninput: e => { const v = e.target.value.trim(); if (!v) delete ex.url; else if (/^https?:\/\//i.test(v)) ex.url = v; save(); } })),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn small', disabled: i === 0, 'aria-label': 'Выше', onclick: () => { move(day, i, -1); save(); rerender(); } }, '↑ Выше'),
         h('button', { class: 'btn small', disabled: i === day.exercises.length - 1, 'aria-label': 'Ниже', onclick: () => { move(day, i, 1); save(); rerender(); } }, '↓ Ниже'),
