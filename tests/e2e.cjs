@@ -20,6 +20,20 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.waitForSelector('.ex');
   ok((await p.textContent('h1')).includes('Верх A'), 'понедельник → Верх A');
   await p.screenshot({ path: OUT + '/01-today-empty.png', fullPage: true });
+  // Прошлая тренировка неделю назад (для «прошлого раза», заметки и рекордов)
+  await p.evaluate(async () => {
+    const db = await new Promise(r => { const q = indexedDB.open('zal'); q.onsuccess = () => r(q.result); });
+    const d = new Date(); d.setDate(d.getDate() - 7);
+    const iso = d.toISOString().slice(0, 10);
+    const t = db.transaction('workouts', 'readwrite');
+    t.objectStore('workouts').put({ id: 'old1', date: iso, created: iso + 'T10:00:00Z', dayId: 'upperA', dayName: 'Верх A', note: 'старт',
+      ex: [{ id: 'incline_db', name: 'Жим гантелей на наклонной', muscle: 'Грудь', target: 3, repMin: 6, repMax: 10, rirMin: 2, rirMax: 2, restMin: 120, restMax: 180, note: 'скамья 30°',
+        sets: [{ w: 20, reps: 8, rir: 2, done: true, at: iso + 'T10:00:00Z' }, { w: 20, reps: 8, rir: 2, done: true, at: iso + 'T10:41:00Z' }] }] });
+    await new Promise(r => t.oncomplete = r);
+  });
+  await p.reload(); await p.waitForSelector('.ex');
+  ok((await p.textContent('.last-note')).includes('скамья 30°'), 'заметка прошлого раза видна');
+  ok(await p.locator('.ex').first().locator('.cell input').nth(0).inputValue() === '20', 'предзаполнено из прошлого раза');
   await noOverflow('today');
 
   // Ввод подхода
@@ -29,6 +43,25 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await first.locator('.steps button').nth(5).click(); // RIR +
   await first.locator('.done-btn').first().click();
   ok(await p.isVisible('#timer'), 'таймер запущен после подхода');
+  ok(await p.locator('.set-pr').count() === 1, 'рекорд отмечен');
+  // Отмена
+  await first.locator('.done-btn').nth(1).click();
+  ok(await first.locator('.set.done').count() === 2, 'второй подход отмечен');
+  await p.click('#undo button');
+  ok(await first.locator('.set.done').count() === 1, 'отмена сработала');
+  // Заметка к упражнению
+  await first.locator('button[aria-label="Добавить заметку"]').click();
+  await first.locator('.ex-note input').fill('гантели 22,5 заняты');
+  // Разовое упражнение
+  await p.click('text=+ Упражнение в эту тренировку');
+  await p.fill('input[aria-label="Новое упражнение"]', 'Шраги');
+  await p.click('.add-ex button:has-text("Добавить")');
+  await p.waitForSelector('.ex.extra');
+  await p.locator('.ex.extra button:has-text("Убрать")').click();
+  ok(await p.locator('.ex.extra').count() === 0, 'разовое убрано');
+  await p.click('#undo button');
+  ok(await p.locator('.ex.extra').count() === 1, 'разовое возвращено отменой');
+  await p.fill('.wnote textarea', 'спал 7 ч');
   ok((await p.textContent('.timer-time')).startsWith('2:0') || (await p.textContent('.timer-time')).startsWith('1:5'), 'таймер ~2:00');
   await p.screenshot({ path: OUT + '/02-today-logged.png', fullPage: false });
   await p.reload(); await p.waitForSelector('.ex');
@@ -37,8 +70,14 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(await p.locator('.superset').count() === 1, 'суперсет показан парой');
 
   // История
+  ok(await p.locator('.ex').first().locator('.ex-note input').inputValue() === 'гантели 22,5 заняты', 'заметка сохранилась');
   await p.goto(URL + '#history'); await p.waitForSelector('.hist-item');
-  ok(await p.locator('.hist-item').count() === 1, 'история: 1 тренировка');
+  ok(await p.locator('.hist-item').count() === 2, 'история: 2 тренировки');
+  ok(await p.locator('.pr-chip').count() === 1, 'рекорд в истории');
+  ok(await p.locator('.cal-c.on').count() >= 1, 'календарь');
+  ok((await p.textContent('.hist')).includes('41 мин'), 'длительность');
+  await p.screenshot({ path: OUT + '/02b-history.png', fullPage: true });
+  await noOverflow('history');
 
   // Другой день: прошлый раз
   // Тело
@@ -64,7 +103,12 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.goto(URL + '#body/charts'); await p.waitForSelector('svg.chart');
   await p.locator('svg.chart').click({ position: { x: 200, y: 80 } });
   await p.screenshot({ path: OUT + '/04-chart-weight.png', fullPage: true });
-  await p.click('text=Упражнения'); await p.waitForSelector('svg.chart');
+  await p.click('.chip:has-text("Шаги")'); await p.waitForSelector('svg.chart rect.band');
+  ok(true, 'полоса цели на шагах');
+  await p.click('button:has-text("4 нед")');
+  await p.click('button:has-text("Всё")'); await p.waitForSelector('svg.chart');
+  await p.screenshot({ path: OUT + '/04b-steps.png', fullPage: true });
+  await p.click('.chip:has-text("Упражнения")'); await p.waitForSelector('svg.chart');
   await p.screenshot({ path: OUT + '/05-chart-ex.png', fullPage: true });
 
   // Фото
@@ -80,8 +124,9 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
 
   // Программа
   await p.goto(URL + '#program'); await p.waitForSelector('.vol-row');
-  const vol = await p.$$eval('.vol-row', rs => Object.fromEntries(rs.map(r => [r.children[0].textContent, +r.children[2].textContent])));
+  const vol = await p.$$eval('.vol-row', rs => Object.fromEntries(rs.map(r => [r.children[0].textContent, +r.children[2].textContent.split('/')[1]])));
   ok(vol['Трицепс'] === 8 && vol['Спина'] === 12 && vol['Бицепс'] === 11 && vol['Грудь'] === 8, 'объём: ' + JSON.stringify(vol));
+  ok(/1\s*\/ 8/.test(await p.locator('.vol-row', { hasText: 'Грудь' }).textContent()), 'сделано/план по груди');
   await p.locator('.pex-head').first().click();
   await p.screenshot({ path: OUT + '/07-program.png', fullPage: true });
   await noOverflow('program');
@@ -104,7 +149,12 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   const [dl] = await Promise.all([p.waitForEvent('download'), p.click('button:has-text("Экспорт —")')]);
   const file = OUT + '/backup.json'; await dl.saveAs(file);
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  ok(data.workouts.length === 1 && data.photos.length === 2 && data.metrics.length === 20, 'экспорт: полный');
+  const csv = [];
+  p.on('download', d => csv.push(d));
+  await p.click('button:has-text("Экспорт CSV")'); await p.waitForTimeout(1500);
+  ok(csv.length === 2, 'CSV: два файла');
+  if (csv[0]) { const f = OUT + '/t.csv'; await csv[0].saveAs(f); const t = fs.readFileSync(f, 'utf8'); ok(t.charCodeAt(0) === 0xFEFF && t.includes(';22,5;') && t.includes('гантели 22,5 заняты'), 'CSV: формат Excel'); }
+  ok(data.workouts.length === 2 && data.photos.length === 2 && data.metrics.length === 20, 'экспорт: полный');
   await p.waitForSelector('text=Последний экспорт');
   await p.click('text=Удалить все данные');
   await p.waitForSelector('.ex');
@@ -117,7 +167,7 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.goto(URL + '#body/photos'); await p.waitForSelector('.ph');
   ok(await p.locator('.ph').count() === 2, 'импорт: фото восстановлены');
   await p.goto(URL + '#today'); await p.waitForSelector('.ex');
-  ok(await p.locator('.set.done').count() === 1, 'импорт: подход восстановлен');
+  ok(await p.locator('.set.done').count() === 1 && await p.locator('.ex.extra').count() === 1, 'импорт: подход и разовое восстановлены');
 
   // Офлайн
   await p.goto(URL + '#today'); await p.waitForTimeout(800);

@@ -1,7 +1,7 @@
 // Тело: ежедневные метрики, талия, фото, графики.
 import { h, isoDate, addDays, fmtDate, fmtNum, num, uid, weekStart, toast, e1rm, fmtDateFull } from '../util.js';
 import { all, get, put, del } from '../db.js';
-import { allWorkouts } from '../state.js';
+import { allWorkouts, state } from '../state.js';
 import { lineChart, rolling7 } from '../charts.js';
 import { compressImage } from '../photos.js';
 
@@ -9,6 +9,10 @@ let entryDate = null;
 let chartTab = 'weight';
 let chartEx = null;
 let exMetric = 'e1rm';
+let chartEx2 = '';
+let chartPeriod = '4w';
+const PERIODS = [['4w', '4 нед', 28], ['3m', '3 мес', 91], ['all', 'Всё', null]];
+const cutoff = () => { const d = PERIODS.find(p => p[0] === chartPeriod)[2]; return d ? addDays(isoDate(), -d + 1) : '0000'; };
 let compareSel = [];
 
 export async function renderBody(root, sub = 'log') {
@@ -85,37 +89,43 @@ export function weeklyAverages(ms) {
 }
 
 async function renderCharts(root) {
-  const ms = (await all('metrics')).sort((a, b) => a.date.localeCompare(b.date));
+  const cut = cutoff();
+  const msAll = (await all('metrics')).sort((a, b) => a.date.localeCompare(b.date));
+  const ms = msAll.filter(m => m.date >= cut);
+  const g = state.settings.goals;
   const tabs = [['weight', 'Вес'], ['wweek', 'Вес / нед'], ['waist', 'Талия'], ['steps', 'Шаги'], ['sleep', 'Сон'], ['ex', 'Упражнения']];
   const box = h('div', { class: 'chart-box' });
   const caption = h('div', { class: 'legend' });
   const extra = h('div');
   root.append(h('div', { class: 'chips scroll' }, tabs.map(([k, t]) => h('button', { class: 'chip' + (k === chartTab ? ' on' : ''), onclick: () => { chartTab = k; root.innerHTML = ''; renderBody(root, 'charts'); } }, t))),
+    h('div', { class: 'seg small period' }, PERIODS.map(([k, t]) => h('button', { class: k === chartPeriod ? 'on' : '', 'aria-pressed': String(k === chartPeriod), onclick: () => { chartPeriod = k; root.innerHTML = ''; renderBody(root, 'charts'); } }, t))),
     extra, h('section', { class: 'card' }, caption, box));
 
   const pts = f => ms.filter(m => m[f] != null).map(m => ({ x: m.date, y: m[f] }));
+  // Среднее за 7 дней считаем по всем данным, чтобы начало периода не искажалось
+  const r7 = f => rolling7(msAll.filter(m => m[f] != null).map(m => ({ x: m.date, y: m[f] }))).filter(q => q.x >= cut);
   const draw = async () => {
     if (chartTab === 'weight') {
-      const p = pts('weight');
+      const F = 'weight', p = pts(F);
       caption.replaceChildren(key('dot', 'вес за день'), key('line', 'среднее за 7 дней'));
-      lineChart(box, { series: [{ points: p, kind: 'dots', cls: 'soft', name: 'вес' }, { points: rolling7(p), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 1), unit: 'кг' });
+      lineChart(box, { series: [{ points: p, kind: 'dots', cls: 'soft', name: 'вес' }, { points: r7(F), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 1), unit: 'кг' });
     } else if (chartTab === 'wweek') {
-      const w = weeklyAverages(ms).filter(x => x.weight != null).map(x => ({ x: x.week, y: x.weight, note: 'неделя с ' + fmtDate(x.week) }));
+      const w = weeklyAverages(msAll).filter(x => x.week >= weekStart(cut)).filter(x => x.weight != null).map(x => ({ x: x.week, y: x.weight, note: 'неделя с ' + fmtDate(x.week) }));
       caption.replaceChildren(key('line', 'средний вес за неделю'));
       lineChart(box, { series: [{ points: w, kind: 'line', dots: true, cls: 'accent' }], yFmt: v => fmtNum(v, 1), unit: 'кг' });
     } else if (chartTab === 'waist') {
       caption.replaceChildren(key('line', 'талия'));
       lineChart(box, { series: [{ points: pts('waist'), kind: 'line', dots: true, cls: 'accent' }], yFmt: v => fmtNum(v, 1), unit: 'см' });
     } else if (chartTab === 'steps') {
-      const p = pts('steps');
-      caption.replaceChildren(key('bar', 'шаги за день'), key('line', 'среднее за 7 дней'));
-      lineChart(box, { series: [{ points: p, kind: 'bars', cls: 'soft', name: 'шаги' }, { points: rolling7(p), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 0) });
+      const F = 'steps', p = pts(F);
+      caption.replaceChildren(key('bar', 'шаги за день'), key('line', 'среднее за 7 дней'), key('band', `цель ${fmtNum(g.stepsLo, 0)}–${fmtNum(g.stepsHi, 0)}`));
+      lineChart(box, { series: [{ points: p, kind: 'bars', cls: 'soft', name: 'шаги' }, { points: r7(F), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 0), band: { lo: g.stepsLo, hi: g.stepsHi } });
     } else if (chartTab === 'sleep') {
-      const p = pts('sleep');
-      caption.replaceChildren(key('bar', 'сон, часы'), key('line', 'среднее за 7 дней'));
-      lineChart(box, { series: [{ points: p, kind: 'bars', cls: 'soft', name: 'сон' }, { points: rolling7(p), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 1), unit: 'ч' });
+      const F = 'sleep', p = pts(F);
+      caption.replaceChildren(key('bar', 'сон, часы'), key('line', 'среднее за 7 дней'), key('band', `цель ${fmtNum(g.sleepLo, 1)}–${fmtNum(g.sleepHi, 1)} ч`));
+      lineChart(box, { series: [{ points: p, kind: 'bars', cls: 'soft', name: 'сон' }, { points: r7(F), kind: 'line', cls: 'accent', name: 'ср. 7 дн' }], yFmt: v => fmtNum(v, 1), unit: 'ч', band: { lo: g.sleepLo, hi: g.sleepHi } });
     } else if (chartTab === 'ex') {
-      await exChart(box, caption, extra);
+      await exChart(box, caption, extra, cut);
     }
   };
   requestAnimationFrame(draw);
@@ -123,30 +133,47 @@ async function renderCharts(root) {
 
 function key(kind, text) { return h('span', { class: 'key ' + kind }, h('i'), text); }
 
-async function exChart(box, caption, extra) {
+async function exChart(box, caption, extra, cut) {
   const ws = (await allWorkouts()).slice().reverse();
   const names = new Map();
   for (const w of ws) for (const e of w.ex) if (e.sets.some(s => s.done && s.w != null && s.reps)) names.set(e.id, e.name);
   if (!names.size) { box.replaceChildren(h('div', { class: 'chart-empty' }, 'Отметьте выполненные подходы с весом и повторениями — здесь появится прогресс.')); return; }
   if (!names.has(chartEx)) chartEx = [...names.keys()][0];
+  if (chartEx2 && (!names.has(chartEx2) || chartEx2 === chartEx)) chartEx2 = '';
+  const again = () => exChart(box, caption, extra, cut);
   extra.replaceChildren(h('section', { class: 'card tight' },
     h('label', { class: 'field' }, h('span', {}, 'Упражнение'),
-      h('select', { onchange: e => { chartEx = e.target.value; exChart(box, caption, extra); } },
+      h('select', { onchange: e => { chartEx = e.target.value; again(); } },
         [...names].map(([id, n]) => h('option', { value: id, selected: id === chartEx }, n)))),
+    h('label', { class: 'field' }, h('span', {}, 'Сравнить с (пунктир)'),
+      h('select', { onchange: e => { chartEx2 = e.target.value; again(); } },
+        h('option', { value: '' }, '— нет —'),
+        [...names].filter(([id]) => id !== chartEx).map(([id, n]) => h('option', { value: id, selected: id === chartEx2 }, n)))),
     h('div', { class: 'seg small' }, [['e1rm', 'Лучший подход'], ['vol', 'Объём']].map(([k, t]) =>
-      h('button', { class: exMetric === k ? 'on' : '', onclick: () => { exMetric = k; exChart(box, caption, extra); } }, t)))));
-  const pts = [];
-  for (const w of ws) {
-    const e = w.ex.find(x => x.id === chartEx); if (!e) continue;
-    const done = e.sets.filter(s => s.done && s.w != null && s.reps);
-    if (!done.length) continue;
-    if (exMetric === 'e1rm') {
-      const b = done.reduce((a, s) => (e1rm(s.w, s.reps) > e1rm(a.w, a.reps) ? s : a));
-      pts.push({ x: w.date, y: e1rm(b.w, b.reps), note: `${fmtNum(b.w, 2)}×${b.reps}` });
-    } else pts.push({ x: w.date, y: done.reduce((a, s) => a + s.w * s.reps, 0), note: `${done.length} подх.` });
+      h('button', { class: exMetric === k ? 'on' : '', onclick: () => { exMetric = k; again(); } }, t)))));
+  const series = (id) => {
+    const pts = [];
+    for (const w of ws) {
+      if (w.date < cut) continue;
+      const e = w.ex.find(x => x.id === id); if (!e) continue;
+      const done = e.sets.filter(s => s.done && s.w != null && s.reps);
+      if (!done.length) continue;
+      if (exMetric === 'e1rm') {
+        const b = done.reduce((a, s) => (e1rm(s.w, s.reps) > e1rm(a.w, a.reps) ? s : a));
+        pts.push({ x: w.date, y: e1rm(b.w, b.reps), note: `${fmtNum(b.w, 2)}×${b.reps}` });
+      } else pts.push({ x: w.date, y: done.reduce((a, s) => a + s.w * s.reps, 0), note: `${done.length} подх.` });
+    }
+    return pts;
+  };
+  const what = exMetric === 'e1rm' ? 'лучший подход — оценка 1ПМ по Эпли, кг' : 'объём: сумма вес × повторения, кг';
+  const list = [{ points: series(chartEx), kind: 'line', dots: true, cls: 'accent', name: names.get(chartEx) }];
+  const keys = [key('line', chartEx2 ? names.get(chartEx) : what)];
+  if (chartEx2) {
+    list.push({ points: series(chartEx2), kind: 'line', dots: true, cls: 'alt', name: names.get(chartEx2) });
+    keys.push(key('line alt', names.get(chartEx2)), h('span', { class: 'muted' }, what));
   }
-  caption.replaceChildren(key('line', exMetric === 'e1rm' ? 'лучший подход — оценка 1ПМ по Эпли, кг' : 'объём: сумма вес × повторения, кг'));
-  lineChart(box, { series: [{ points: pts, kind: 'line', dots: true, cls: 'accent' }], yFmt: v => fmtNum(v, exMetric === 'e1rm' ? 1 : 0), unit: 'кг' });
+  caption.replaceChildren(...keys);
+  lineChart(box, { series: list, yFmt: v => fmtNum(v, exMetric === 'e1rm' ? 1 : 0), unit: 'кг' });
 }
 
 async function renderPhotos(root) {

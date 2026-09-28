@@ -16,7 +16,7 @@ function niceTicks(min, max, n = 4) {
   return t;
 }
 
-export function lineChart(box, { series, yFmt = v => fmtNum(v), unit = '', height = 200 }) {
+export function lineChart(box, { series, yFmt = v => fmtNum(v), unit = '', height = 200, band = null }) {
   box.innerHTML = '';
   const pts = series.flatMap(se => se.points);
   if (pts.length === 0) { box.append(h('div', { class: 'chart-empty' }, 'Пока нет данных')); return; }
@@ -26,7 +26,7 @@ export function lineChart(box, { series, yFmt = v => fmtNum(v), unit = '', heigh
   let x0 = Math.min(...xs), x1 = Math.max(...xs);
   const hasBars = series.some(se => se.kind === 'bars');
   if (x0 === x1 || hasBars) { x0 -= 4 * 864e5; x1 += 4 * 864e5; }
-  const ys = pts.map(p => p.y);
+  const ys = pts.map(p => p.y).concat(band ? [band.lo, band.hi] : []);
   const ticks = niceTicks(Math.min(...ys, hasBars ? 0 : Infinity), Math.max(...ys));
   const y0 = ticks[0], y1 = ticks[ticks.length - 1];
   const X = t => pad.l + (t - x0) / (x1 - x0) * (W - pad.l - pad.r);
@@ -36,6 +36,10 @@ export function lineChart(box, { series, yFmt = v => fmtNum(v), unit = '', heigh
   for (const t of ticks) {
     svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: Y(t), y2: Y(t), class: 'grid' }));
     const tx = s('text', { x: pad.l - 6, y: Y(t) + 4, class: 'tick', 'text-anchor': 'end' }); tx.textContent = yFmt(t); svg.append(tx);
+  }
+  if (band) {
+    svg.append(s('rect', { x: pad.l, width: W - pad.l - pad.r, y: Y(band.hi), height: Math.max(1, Y(band.lo) - Y(band.hi)), class: 'band' }));
+    const bt = s('text', { x: W - pad.r - 4, y: Y(band.hi) + 13, class: 'band-t', 'text-anchor': 'end' }); bt.textContent = band.label || 'цель'; svg.append(bt);
   }
   // Подписи по X: начало, середина, конец
   const xl = [x0, (x0 + x1) / 2, x1];

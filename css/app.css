@@ -413,3 +413,57 @@ mark.cur { background: var(--accent); color: var(--accent-ink); }
   .chips { margin: 0; padding-left: 2px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ---------- v2: заметки, разовые, рекорды, календарь, цели, отмена ---------- */
+.chart .band { fill: var(--ok); opacity: .13; }
+.chart .band-t { fill: var(--ok); font: 700 10px var(--text); letter-spacing: .05em; text-transform: uppercase; }
+.chart .line.alt { stroke: var(--ink); stroke-dasharray: 6 4; }
+.chart .dot.alt { fill: var(--ink); }
+.key.line.alt i { background: repeating-linear-gradient(90deg, var(--ink) 0 6px, transparent 6px 9px); }
+.key.band i { width: 14px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--ok) 25%, transparent); }
+.set-pr { grid-column: 2 / -1; font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: .03em; margin-top: -2px; }
+.pr-chip { margin-left: 8px; font-size: 12px; font-weight: 800; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 99px; vertical-align: 2px; }
+.last-note, .hist-note { font-size: 13px; color: var(--ink-2); }
+.hist-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ex-note { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.ex-note:empty { display: none; }
+.ex-note span { color: var(--ink-3); }
+.ex-note input { min-height: 44px; font-size: 15px; }
+.ex.extra { border-style: dashed; }
+.extra-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); margin-right: 6px; }
+.ex-foot { flex-wrap: wrap; }
+.add-ex { margin: 4px 0 12px; }
+textarea { width: 100%; min-height: 64px; padding: 10px 12px; border-radius: var(--r-s); border: 1.5px solid var(--line); background: var(--surface-2); font-size: 16px; resize: vertical; }
+textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.wnote { margin-top: 4px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.cal-head > div { text-align: center; display: flex; flex-direction: column; }
+.cal-head b { font: 700 17px var(--display); }
+.cal-head small { color: var(--ink-3); font-size: 12px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-bottom: 10px; }
+.cal-wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--ink-3); padding-bottom: 2px; }
+.cal-c { height: 40px; min-width: 0; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-weight: 650; font-size: 14px; color: var(--ink-2); text-decoration: none; font-variant-numeric: tabular-nums; border: 2px solid transparent; }
+.cal-c.blank { visibility: hidden; }
+.cal-c.on { background: var(--accent); color: var(--accent-ink); }
+.cal-c.miss { border: 2px dashed var(--ink-3); }
+.cal-c.today { box-shadow: inset 0 0 0 2px var(--ink); }
+.key.cal-on i { width: 12px; height: 12px; border-radius: 4px; background: var(--accent); }
+.key.cal-miss i { width: 12px; height: 12px; border-radius: 4px; border: 2px dashed var(--ink-3); }
+.vol-row.v2 { grid-template-columns: minmax(0, 9em) 1fr 3.8em; }
+.vol-bar.v2 { position: relative; }
+.vol-bar.v2 i { background: var(--accent-soft); }
+.vol-bar.v2 i.done { position: absolute; left: 0; top: 0; background: var(--accent); }
+.vol-row.v2 b small { color: var(--ink-3); font-weight: 600; }
+#undo {
+  position: fixed; left: 50%; transform: translate(-50%, 160%); z-index: 45;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 10px);
+  display: flex; align-items: center; gap: 12px; width: min(560px, calc(100% - 20px));
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; padding: 6px 6px 6px 16px;
+  box-shadow: 0 12px 30px -10px rgba(0,0,0,.45); transition: transform .2s ease; font-size: 15px; font-weight: 600;
+}
+#undo span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#undo button { min-height: 44px; padding: 0 14px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-ink); font-weight: 750; }
+#undo.show { transform: translate(-50%, 0); }
+body.has-timer #undo { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 92px); }
+.goal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (min-width: 900px) { #undo { bottom: 20px; } body.has-timer #undo { bottom: 104px; } }
