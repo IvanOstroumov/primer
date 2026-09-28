@@ -69,7 +69,9 @@ async function start() {
   window.addEventListener('hashchange', route);
   await route();
   if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Версия в URL — принудительный обход любого кэша (браузера или CDN) при поиске sw.js.
+  // Обновлять при каждом бампе VERSION в sw.js, иначе сама регистрация может застрять на старой версии.
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js?v=7').catch(() => {});
   window.__zal = state;
 }
 start();
