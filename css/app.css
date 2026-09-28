@@ -253,26 +253,6 @@ input:focus, select:focus { outline: none; border-color: var(--accent); backgrou
 .tabbar a.on { color: var(--ink); }
 .tabbar a.on svg { stroke: var(--accent); }
 
-/* ---------- Программа ---------- */
-.vol { display: flex; flex-direction: column; gap: 6px; }
-.vol-row { display: grid; grid-template-columns: minmax(0, 11em) 1fr 2.2em; align-items: center; gap: 10px; font-size: 14px; }
-.vol-row b { font: 700 15px var(--display); text-align: right; font-variant-numeric: tabular-nums; }
-.vol-bar { height: 8px; background: var(--bg-2); border-radius: 99px; overflow: hidden; }
-.vol-bar i { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
-.wd-pick { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.wd { min-height: 44px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--surface-2); font-weight: 650; font-size: 14px; }
-.wd.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.prog-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
-.pex { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
-.pex.ss-a { border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; border-color: var(--accent); }
-.pex.ss-b { border-top-left-radius: 4px; border-top-right-radius: 4px; border-color: var(--accent); margin-top: -6px; }
-.pex-head { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 14px; border: 0; background: transparent; text-align: left; }
-.pex-n { font: 800 15px var(--display); color: var(--ink-3); width: 20px; }
-.pex-t { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.pex-t small { color: var(--ink-3); font-size: 13px; }
-.ss-badge { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; }
-.pex-body { padding: 4px 14px 14px; border-top: 1px solid var(--line); }
-.pex.open { box-shadow: var(--shadow); }
 
 /* ---------- Тело ---------- */
 .date-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
@@ -429,10 +409,9 @@ mark.cur { background: var(--accent); color: var(--accent-ink); }
 .ex-note:empty { display: none; }
 .ex-note span { color: var(--ink-3); }
 .ex-note input { min-height: 44px; font-size: 15px; }
-.ex.extra { border-style: dashed; }
 .extra-tag { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); margin-right: 6px; }
 .ex-foot { flex-wrap: wrap; }
-.add-ex { margin: 4px 0 12px; }
+.finish-btn { margin-top: 14px; font-size: 17px; min-height: 56px; }
 textarea { width: 100%; min-height: 64px; padding: 10px 12px; border-radius: var(--r-s); border: 1.5px solid var(--line); background: var(--surface-2); font-size: 16px; resize: vertical; }
 textarea:focus { outline: none; border-color: var(--accent); background: var(--surface); }
 .wnote { margin-top: 4px; }
@@ -449,11 +428,6 @@ textarea:focus { outline: none; border-color: var(--accent); background: var(--s
 .cal-c.today { box-shadow: inset 0 0 0 2px var(--ink); }
 .key.cal-on i { width: 12px; height: 12px; border-radius: 4px; background: var(--accent); }
 .key.cal-miss i { width: 12px; height: 12px; border-radius: 4px; border: 2px dashed var(--ink-3); }
-.vol-row.v2 { grid-template-columns: minmax(0, 9em) 1fr 3.8em; }
-.vol-bar.v2 { position: relative; }
-.vol-bar.v2 i { background: var(--accent-soft); }
-.vol-bar.v2 i.done { position: absolute; left: 0; top: 0; background: var(--accent); }
-.vol-row.v2 b small { color: var(--ink-3); font-weight: 600; }
 #undo {
   position: fixed; left: 50%; transform: translate(-50%, 160%); z-index: 45;
   bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 10px);

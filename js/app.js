@@ -1,7 +1,6 @@
 import { h } from './util.js';
 import { loadState, applyTheme, state } from './state.js';
 import { renderToday, renderHistory, renderWorkout } from './screens/today.js';
-import { renderProgram } from './screens/program.js';
 import { renderBody } from './screens/body.js';
 import { renderRamp, rampInfo } from './screens/ramp.js';
 import { renderPlan } from './screens/plan.js';
@@ -12,11 +11,10 @@ import { renderExercise } from './screens/exercise.js';
 const I = {
   today: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>',
   body: '<path d="M4 19h16M6 16l4-5 3 3 5-7"/>',
-  program: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
   plan: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
 };
-const NAV = [['today', 'Сегодня'], ['body', 'Тело'], ['program', 'Программа'], ['plan', 'План'], ['more', 'Ещё']];
+const NAV = [['today', 'Сегодня'], ['body', 'Тело'], ['plan', 'План'], ['more', 'Ещё']];
 const MORE_ROUTES = ['more', 'ramp', 'research', 'settings', 'history', 'workout', 'ex'];
 
 function nav() {
@@ -48,7 +46,6 @@ async function route() {
       case 'history': await renderHistory(root, arg); break;
       case 'ex': await renderExercise(root, arg); break;
       case 'workout': await renderWorkout(root, arg); break;
-      case 'program': renderProgram(root); break;
       case 'body': await renderBody(root, arg); break;
       case 'ramp': renderRamp(root); break;
       case 'plan': renderPlan(root); break;

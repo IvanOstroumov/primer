@@ -3,11 +3,9 @@ import { h, isoDate, fmtDate, fmtNum, num, uid, range, restLabel, toast, undoToa
 import { put, del, get, all } from '../db.js';
 import { state, allWorkouts, lastSessionFor, workoutDuration } from '../state.js';
 import { kindOf, loadBwAt, prSets, prCount, setText, volumeOf } from '../load.js';
-import { MUSCLES } from '../seed.js';
 import { startTimer } from '../timer.js';
 import { rampInfo } from './ramp.js';
 
-export const KINDS = [['reps', 'Вес × повторы'], ['bw', 'Собственный вес'], ['time', 'На время']];
 const SKIP = ['занято', 'боль', 'нет времени', 'другое'];
 
 // День по умолчанию: по расписанию сегодня, иначе ближайший следующий
@@ -36,7 +34,7 @@ export async function renderToday(root, dayIdArg) {
   const workouts = await allWorkouts();
   const days = state.program.days;
   if (!days.length) {
-    root.append(h('div', { class: 'empty' }, h('h2', {}, 'В программе нет дней'), h('p', {}, 'Добавьте день в разделе «Программа».'), h('a', { class: 'btn primary', href: '#program' }, 'Открыть программу')));
+    root.append(h('div', { class: 'empty' }, h('h2', {}, 'Программа пуста'), h('p', {}, 'Обратитесь к разработчику.')));
     return;
   }
   const dayId = days.some(d => d.id === dayIdArg) ? dayIdArg : defaultDayId();
@@ -64,7 +62,7 @@ export async function renderToday(root, dayIdArg) {
     root.append(h('a', { class: 'ramp-strip', href: '#ramp' },
       h('b', {}, `Возврат · неделя ${ramp.week}`), ` Подходы: ${ramp.row.sets} · RIR ${ramp.row.rir}`));
   }
-  root.append(workoutEditor(w, isDraft, workouts, await loadBwAt()));
+  root.append(workoutEditor(w, isDraft, workouts, await loadBwAt(), true));
 }
 
 export async function renderWorkout(root, id) {
@@ -88,7 +86,7 @@ export async function renderWorkout(root, id) {
     workoutEditor(w, false, workouts, bwAt));
 }
 
-function workoutEditor(w, isDraft, workouts, bwAt) {
+function workoutEditor(w, isDraft, workouts, bwAt, showFinish) {
   let saved = !isDraft;
   const status = h('div', { class: 'save-status', 'aria-live': 'polite' });
   const clock = h('div', { class: 'live-clock', hidden: true });
@@ -139,52 +137,22 @@ function workoutEditor(w, isDraft, workouts, bwAt) {
       } else wrap.append(exCard(ex, ctx, null));
     }
     if (!list.length) wrap.append(h('div', { class: 'empty small' }, 'В этой тренировке нет упражнений.'));
-    wrap.append(addExercisePanel(w, save, draw),
+    wrap.append(
       h('label', { class: 'field wnote' }, h('span', {}, 'Заметка к тренировке'),
-        h('textarea', { rows: 2, placeholder: 'самочувствие, сон, что угодно', value: w.note || '', oninput: e => { w.note = e.target.value; save(); } })));
+        h('textarea', { rows: 2, placeholder: 'самочувствие, сон, что угодно', value: w.note || '', oninput: e => { w.note = e.target.value; save(); } })),
+      showFinish ? h('button', {
+        class: 'btn primary wide finish-btn',
+        onclick: async () => {
+          w.finishedAt = new Date().toISOString();
+          await save();
+          toast('Тренировка завершена 💪');
+          location.hash = '#history';
+        },
+      }, '✓ Завершить тренировку') : null,
+    );
   };
   draw();
   return h('div', {}, h('div', { class: 'status-row' }, clock, status), wrap);
-}
-
-function addExercisePanel(w, save, redraw) {
-  const box = h('div', { class: 'add-ex' });
-  const closed = () => box.replaceChildren(h('button', { class: 'btn wide', onclick: open }, '+ Упражнение в эту тренировку'));
-  function open() {
-    const opts = state.program.days.map(d => h('optgroup', { label: d.name }, d.exercises.map(e => h('option', { value: d.id + '|' + e.id }, e.name))));
-    const sel = h('select', { 'aria-label': 'Упражнение из программы' }, h('option', { value: '' }, '— из программы —'), opts);
-    const name = h('input', { type: 'text', placeholder: 'или новое название', 'aria-label': 'Новое упражнение' });
-    const muscle = h('select', { 'aria-label': 'Мышца' }, MUSCLES.map(m => h('option', { value: m, selected: m === 'Другое' }, m)));
-    const kind = h('select', { 'aria-label': 'Тип' }, KINDS.map(([k, t]) => h('option', { value: k }, t)));
-    box.replaceChildren(h('section', { class: 'card' },
-      h('h2', { class: 'card-h' }, 'Разовое упражнение'),
-      h('p', { class: 'muted small' }, 'Добавляется только в эту тренировку, программа не меняется.'),
-      h('label', { class: 'field' }, h('span', {}, 'Из программы (история продолжится)'), sel),
-      h('label', { class: 'field' }, h('span', {}, 'Новое (отдельная история)'), name),
-      h('div', { class: 'goal-grid' },
-        h('label', { class: 'field' }, h('span', {}, 'Мышца'), muscle),
-        h('label', { class: 'field' }, h('span', {}, 'Тип'), kind)),
-      h('div', { class: 'btn-row' },
-        h('button', {
-          class: 'btn primary', onclick: async () => {
-            let ex;
-            if (sel.value) {
-              const [dId, eId] = sel.value.split('|');
-              const src = state.program.days.find(d => d.id === dId).exercises.find(e => e.id === eId);
-              ex = snapshot(src, await allWorkouts());
-            } else if (name.value.trim()) {
-              const t = kind.value === 'time';
-              ex = { id: uid(), name: name.value.trim(), muscle: muscle.value, kind: kind.value, target: 3, repMin: t ? 30 : 8, repMax: t ? 60 : 12, rirMin: 2, rirMax: 2, restMin: 120, restMax: 120, failLast: false, warmup: '', sets: [0, 1, 2].map(() => ({ w: null, reps: null, rir: null, done: false })) };
-            } else { toast('Выберите упражнение или введите название'); return; }
-            ex.ssNext = false; ex.extra = true;
-            w.ex.push(ex); await save(); redraw();
-            toast('Добавлено: ' + ex.name);
-          },
-        }, 'Добавить'),
-        h('button', { class: 'btn ghost', onclick: closed }, 'Отмена'))));
-  }
-  closed();
-  return box;
 }
 
 // Разница с тем же подходом прошлой тренировки — только факт
@@ -204,7 +172,7 @@ function exCard(ex, ctx, ssTag) {
   const last = lastSessionFor(workouts, ex.id, w.id, w.date);
   let editing = false;
   const rows = h('div', { class: 'sets' });
-  const card = h('article', { class: 'ex' + (ssTag ? ' in-ss' : '') + (ex.extra ? ' extra' : '') + (ex.skipped ? ' skipped' : '') });
+  const card = h('article', { class: 'ex' + (ssTag ? ' in-ss' : '') + (ex.skipped ? ' skipped' : '') });
 
   const counter = h('span', { class: 'ex-count' });
   const titleRow = h('div', { class: 'ex-head' },
@@ -213,7 +181,6 @@ function exCard(ex, ctx, ssTag) {
       h('h3', {}, h('a', { href: '#ex/' + encodeURIComponent(ex.id), class: 'ex-link' }, ex.name),
         ex.url ? h('a', { class: 'tech-link', href: ex.url, target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'Техника: открыть ссылку' }, '▶') : null),
       h('div', { class: 'ex-meta' },
-        ex.extra ? h('span', { class: 'extra-tag' }, 'разовое') : null,
         k === 'bw' ? h('span', { class: 'extra-tag' }, 'свой вес') : null,
         `${ex.target ?? ex.sets.length} × ${range(ex.repMin, ex.repMax)}${k === 'time' ? ' с' : ''} · RIR ${range(ex.rirMin, ex.rirMax)}`, ' · ', h('span', { class: 'muscle' }, ex.muscle))),
     ex.skipped ? null : counter);
@@ -363,13 +330,7 @@ function exCard(ex, ctx, ssTag) {
       h('button', { class: 'btn small', onclick: () => { const p = ex.sets[ex.sets.length - 1]; ex.sets.push({ w: p?.w ?? null, reps: p?.reps ?? null, rir: p?.rir ?? null, done: false }); save(); drawRows(); } }, '+ Подход'),
       h('button', { class: 'btn small ghost', onclick: e => { editing = !editing; e.target.textContent = editing ? 'Готово' : 'Изменить'; drawRows(); } }, 'Изменить'),
       ex.note == null ? h('button', { class: 'btn small ghost', 'aria-label': 'Добавить заметку', onclick: e => { e.target.remove(); drawNote(true); } }, '✎') : null,
-      h('button', { class: 'btn small ghost', 'aria-expanded': 'false', onclick: e => { skipBox.hidden = !skipBox.hidden; e.target.setAttribute('aria-expanded', String(!skipBox.hidden)); } }, 'Пропустить'),
-      ex.extra ? h('button', {
-        class: 'btn small danger', onclick: () => {
-          const i = w.ex.indexOf(ex); w.ex.splice(i, 1); save(); redraw();
-          undoToast(`«${ex.name}» убрано`, () => { w.ex.splice(i, 0, ex); save(); redraw(); });
-        },
-      }, 'Убрать') : null),
+      h('button', { class: 'btn small ghost', 'aria-expanded': 'false', onclick: e => { skipBox.hidden = !skipBox.hidden; e.target.setAttribute('aria-expanded', String(!skipBox.hidden)); } }, 'Пропустить')),
     skipBox,
   ].filter(Boolean));
   drawNote(false);

@@ -18,6 +18,14 @@ export async function loadState() {
   }
   // Миграция: подтягивания в старой программе → тип «собственный вес»
   for (const d of state.program.days) for (const e of d.exercises) if (!e.kind && e.id === 'pullup') { e.kind = 'bw'; await setKV('program', state.program); }
+  // Миграция: добавить боковые дельты в день «Низ» (было 6 серий/нед., стало 9 — в норме 8–12)
+  const lower = state.program.days.find(d => d.id === 'lower');
+  if (lower && !lower.exercises.some(e => e.id === 'lat_raise2')) {
+    const def = defaultProgram().days.find(d => d.id === 'lower').exercises.find(e => e.id === 'lat_raise2');
+    const calfIdx = lower.exercises.findIndex(e => e.id === 'calf');
+    lower.exercises.splice(calfIdx >= 0 ? calfIdx : lower.exercises.length, 0, def);
+    await setKV('program', state.program);
+  }
   const saved = await getKV('settings', {});
   state.settings = { ...DEFAULT_SETTINGS, ...saved, goals: { ...DEFAULT_SETTINGS.goals, ...(saved.goals || {}) } };
 }

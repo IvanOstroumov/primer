@@ -54,15 +54,8 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   // Заметка к упражнению
   await first.locator('button[aria-label="Добавить заметку"]').click();
   await first.locator('.ex-note input').fill('гантели 22,5 заняты');
-  // Разовое упражнение
-  await p.click('text=+ Упражнение в эту тренировку');
-  await p.fill('input[aria-label="Новое упражнение"]', 'Шраги');
-  await p.click('.add-ex button:has-text("Добавить")');
-  await p.waitForSelector('.ex.extra');
-  await p.locator('.ex.extra button:has-text("Убрать")').click();
-  ok(await p.locator('.ex.extra').count() === 0, 'разовое убрано');
-  await p.click('#undo button');
-  ok(await p.locator('.ex.extra').count() === 1, 'разовое возвращено отменой');
+  ok(await p.locator('text=+ Упражнение в эту тренировку').count() === 0, 'разовое упражнение недоступно');
+  ok(await p.locator('a:has-text("Программа")').count() === 0, 'вкладки «Программа» больше нет');
   await p.fill('.wnote textarea', 'спал 7 ч');
   // Как в прошлый раз
   await first.locator('.cell input').nth(2).fill('99');
@@ -141,21 +134,18 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   ok(true, 'сравнение фото');
   await p.screenshot({ path: OUT + '/06-photos.png', fullPage: true });
 
-  // Программа
-  await p.goto(URL + '#program'); await p.waitForSelector('.vol-row');
-  const vol = await p.$$eval('.vol-row', rs => Object.fromEntries(rs.map(r => [r.children[0].textContent, +r.children[2].textContent.split('/')[1]])));
-  ok(vol['Трицепс'] === 8 && vol['Спина'] === 12 && vol['Бицепс'] === 11 && vol['Грудь'] === 8, 'объём: ' + JSON.stringify(vol));
-  ok(/1\s*\/ 8/.test(await p.locator('.vol-row', { hasText: 'Грудь' }).textContent()), 'сделано/план по груди');
-  await p.locator('.pex-head').first().click();
-  await p.fill('input[type=url]', 'https://example.com/video');
+  // Программа не редактируется, но данные (например, ссылка на технику) всё ещё показываются, если заданы
+  await p.evaluate(() => {
+    const p = window.__zal.program;
+    p.days.find(d => d.id === 'upperA').exercises.find(e => e.id === 'incline_db').url = 'https://example.com/video';
+  });
   await p.goto(URL + '#ex/incline_db'); await p.waitForSelector('.ex-page-meta');
-  ok(await p.locator('.ex-page-meta a:has-text("Техника")').count() === 1, 'ссылка на технику');
+  ok(await p.locator('.ex-page-meta a:has-text("Техника")').count() === 1, 'ссылка на технику отображается');
   ok(await p.locator('.ex', { hasText: 'Подтягивания' }).count() === 0, 'сегодня Верх A');
   await p.goto(URL + '#today/upperB'); await p.waitForSelector('.ex');
   ok((await p.locator('.ex', { hasText: 'Подтягивания' }).textContent()).includes('± кг'), 'подтягивания: свой вес');
-  await p.goto(URL + '#program'); await p.waitForSelector('.pex-head');
-  await p.screenshot({ path: OUT + '/07-program.png', fullPage: true });
-  await noOverflow('program');
+  await p.goto(URL + '#today/lower'); await p.waitForSelector('.ex');
+  ok(await p.locator('.ex', { hasText: 'Боковые дельты' }).count() === 1, 'миграция: боковые дельты добавлены в день «Низ»');
 
   for (const r of ['plan', 'ramp', 'more', 'settings']) {
     await p.goto(URL + '#' + r); await p.waitForTimeout(250);
@@ -193,7 +183,23 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.goto(URL + '#body/photos'); await p.waitForSelector('.ph');
   ok(await p.locator('.ph').count() === 2, 'импорт: фото восстановлены');
   await p.goto(URL + '#today'); await p.waitForSelector('.ex');
-  ok(await p.locator('.set.done').count() === 1 && await p.locator('.ex.extra').count() === 1, 'импорт: подход и разовое восстановлены');
+  ok(await p.locator('.set.done').count() === 1, 'импорт: подход восстановлен');
+
+  // Завершить тренировку
+  ok(await p.locator('.finish-btn').count() === 1, 'кнопка «Завершить тренировку» есть');
+  await p.click('.finish-btn');
+  await p.waitForURL(/#history$/);
+  const finished = await p.evaluate(async () => {
+    const db = await new Promise(r => { const q = indexedDB.open('zal'); q.onsuccess = () => r(q.result); });
+    const t = db.transaction('workouts');
+    const all = await new Promise(r => { const q = t.objectStore('workouts').getAll(); q.onsuccess = () => r(q.result); });
+    const today = new Date().toISOString().slice(0, 10);
+    return all.find(w => w.date === today)?.finishedAt != null;
+  });
+  ok(finished, 'тренировка помечена завершённой');
+  await p.locator('.hist-item').first().click();
+  await p.waitForSelector('.ex');
+  ok(await p.locator('.finish-btn').count() === 0, 'на странице прошлой тренировки кнопки завершения нет');
 
   // Офлайн
   await p.goto(URL + '#today'); await p.waitForTimeout(800);
