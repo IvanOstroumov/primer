@@ -4,6 +4,7 @@ import { all, get, put, del } from '../db.js';
 import { allWorkouts, state } from '../state.js';
 import { lineChart, rolling7 } from '../charts.js';
 import { compressImage } from '../photos.js';
+import { kindOf, loadBwAt, scoreOf, volumeOf, setText } from '../load.js';
 
 let entryDate = null;
 let chartTab = 'weight';
@@ -135,11 +136,15 @@ function key(kind, text) { return h('span', { class: 'key ' + kind }, h('i'), te
 
 async function exChart(box, caption, extra, cut) {
   const ws = (await allWorkouts()).slice().reverse();
-  const names = new Map();
-  for (const w of ws) for (const e of w.ex) if (e.sets.some(s => s.done && s.w != null && s.reps)) names.set(e.id, e.name);
+  const bwAt = await loadBwAt();
+  const names = new Map(), kinds = new Map();
+  for (const w of ws) for (const e of w.ex) if (e.sets.some(s => s.done && s.reps && (s.w != null || kindOf(e) !== 'reps'))) { names.set(e.id, e.name); kinds.set(e.id, kindOf(e)); }
+  const isTime = id => kinds.get(id) === 'time';
   if (!names.size) { box.replaceChildren(h('div', { class: 'chart-empty' }, 'Отметьте выполненные подходы с весом и повторениями — здесь появится прогресс.')); return; }
   if (!names.has(chartEx)) chartEx = [...names.keys()][0];
-  if (chartEx2 && (!names.has(chartEx2) || chartEx2 === chartEx)) chartEx2 = '';
+  // Сравнивать можно только упражнения с той же единицей (кг или секунды)
+  if (chartEx2 && (!names.has(chartEx2) || chartEx2 === chartEx || isTime(chartEx2) !== isTime(chartEx))) chartEx2 = '';
+  const T = isTime(chartEx);
   const again = () => exChart(box, caption, extra, cut);
   extra.replaceChildren(h('section', { class: 'card tight' },
     h('label', { class: 'field' }, h('span', {}, 'Упражнение'),
@@ -148,24 +153,27 @@ async function exChart(box, caption, extra, cut) {
     h('label', { class: 'field' }, h('span', {}, 'Сравнить с (пунктир)'),
       h('select', { onchange: e => { chartEx2 = e.target.value; again(); } },
         h('option', { value: '' }, '— нет —'),
-        [...names].filter(([id]) => id !== chartEx).map(([id, n]) => h('option', { value: id, selected: id === chartEx2 }, n)))),
-    h('div', { class: 'seg small' }, [['e1rm', 'Лучший подход'], ['vol', 'Объём']].map(([k, t]) =>
+        [...names].filter(([id]) => id !== chartEx && isTime(id) === T).map(([id, n]) => h('option', { value: id, selected: id === chartEx2 }, n)))),
+    h('div', { class: 'seg small' }, [['e1rm', T ? 'Лучшее время' : 'Лучший подход'], ['vol', T ? 'Сумма секунд' : 'Объём']].map(([k, t]) =>
       h('button', { class: exMetric === k ? 'on' : '', onclick: () => { exMetric = k; again(); } }, t)))));
   const series = (id) => {
     const pts = [];
     for (const w of ws) {
       if (w.date < cut) continue;
       const e = w.ex.find(x => x.id === id); if (!e) continue;
-      const done = e.sets.filter(s => s.done && s.w != null && s.reps);
+      const done = e.sets.filter(s => s.done && s.reps && (s.w != null || kindOf(e) !== 'reps'));
       if (!done.length) continue;
       if (exMetric === 'e1rm') {
-        const b = done.reduce((a, s) => (e1rm(s.w, s.reps) > e1rm(a.w, a.reps) ? s : a));
-        pts.push({ x: w.date, y: e1rm(b.w, b.reps), note: `${fmtNum(b.w, 2)}×${b.reps}` });
-      } else pts.push({ x: w.date, y: done.reduce((a, s) => a + s.w * s.reps, 0), note: `${done.length} подх.` });
+        const sc = s => scoreOf(e, s, bwAt, w.date);
+        const b = done.reduce((a, s) => (sc(s) > sc(a) ? s : a));
+        pts.push({ x: w.date, y: sc(b), note: setText(e, b, false) });
+      } else pts.push({ x: w.date, y: volumeOf(e, done, bwAt, w.date), note: `${done.length} подх.` });
     }
     return pts;
   };
-  const what = exMetric === 'e1rm' ? 'лучший подход — оценка 1ПМ по Эпли, кг' : 'объём: сумма вес × повторения, кг';
+  const what = T
+    ? (exMetric === 'e1rm' ? 'лучшее время, с' : 'сумма секунд за тренировку')
+    : (exMetric === 'e1rm' ? 'лучший подход — оценка 1ПМ по Эпли, кг' : 'объём: сумма нагрузка × повторения, кг');
   const list = [{ points: series(chartEx), kind: 'line', dots: true, cls: 'accent', name: names.get(chartEx) }];
   const keys = [key('line', chartEx2 ? names.get(chartEx) : what)];
   if (chartEx2) {
@@ -173,7 +181,10 @@ async function exChart(box, caption, extra, cut) {
     keys.push(key('line alt', names.get(chartEx2)), h('span', { class: 'muted' }, what));
   }
   caption.replaceChildren(...keys);
-  lineChart(box, { series: list, yFmt: v => fmtNum(v, exMetric === 'e1rm' ? 1 : 0), unit: 'кг' });
+  if (kinds.get(chartEx) === 'bw' || kinds.get(chartEx2) === 'bw') keys.push(h('span', { class: 'muted' }, 'свой вес: нагрузка = вес тела на дату + добавочный'));
+  keys.push(h('a', { class: 'ex-open', href: '#ex/' + encodeURIComponent(chartEx) }, 'Страница упражнения ›'));
+  caption.replaceChildren(...keys);
+  lineChart(box, { series: list, yFmt: v => fmtNum(v, exMetric === 'e1rm' && !T ? 1 : 0), unit: T ? 'с' : 'кг' });
 }
 
 async function renderPhotos(root) {

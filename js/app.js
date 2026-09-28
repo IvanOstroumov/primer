@@ -7,6 +7,7 @@ import { renderRamp, rampInfo } from './screens/ramp.js';
 import { renderPlan } from './screens/plan.js';
 import { renderResearch } from './screens/research.js';
 import { renderSettings } from './screens/settings.js';
+import { renderExercise } from './screens/exercise.js';
 
 const I = {
   today: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>',
@@ -16,7 +17,7 @@ const I = {
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
 };
 const NAV = [['today', 'Сегодня'], ['body', 'Тело'], ['program', 'Программа'], ['plan', 'План'], ['more', 'Ещё']];
-const MORE_ROUTES = ['more', 'ramp', 'research', 'settings', 'history', 'workout'];
+const MORE_ROUTES = ['more', 'ramp', 'research', 'settings', 'history', 'workout', 'ex'];
 
 function nav() {
   return h('nav', { class: 'tabbar', 'aria-label': 'Разделы' }, NAV.map(([k, t]) =>
@@ -44,7 +45,8 @@ async function route() {
   try {
     switch (name) {
       case 'today': await renderToday(root, arg); break;
-      case 'history': await renderHistory(root); break;
+      case 'history': await renderHistory(root, arg); break;
+      case 'ex': await renderExercise(root, arg); break;
       case 'workout': await renderWorkout(root, arg); break;
       case 'program': renderProgram(root); break;
       case 'body': await renderBody(root, arg); break;

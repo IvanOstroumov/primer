@@ -30,10 +30,16 @@ const toCSV = rows => '﻿' + rows.map(r => r.map(cell).join(';')).join('\r\n') 
 
 export async function buildCSV() {
   const ws = (await all('workouts')).sort((a, b) => (a.date + (a.created || '')).localeCompare(b.date + (b.created || '')));
-  const tr = [['Дата', 'День', 'Упражнение', 'Мышца', 'Подход', 'Вес, кг', 'Повторы', 'RIR', 'Выполнен', 'Заметка к упражнению', 'Заметка к тренировке']];
-  for (const w of ws) for (const e of w.ex) e.sets.forEach((st, i) => {
-    tr.push([w.date, w.dayName, e.name, e.muscle, i + 1, st.w, st.reps, st.rir, st.done ? 'да' : 'нет', i === 0 ? e.note || '' : '', i === 0 && e === w.ex[0] ? w.note || '' : '']);
-  });
+  const KIND = { reps: 'вес×повторы', bw: 'свой вес', time: 'время' };
+  const tr = [['Дата', 'День', 'Упражнение', 'Мышца', 'Тип', 'Подход', 'Вес, кг (свой вес: добавочный)', 'Повторы / секунды', 'RIR', 'Выполнен', 'Пропуск', 'Заметка к упражнению', 'Заметка к тренировке']];
+  for (const w of ws) for (const e of w.ex) {
+    const skip = e.skipped ? (e.skipped.text || e.skipped.reason) : '';
+    const wn = e === w.ex[0] ? w.note || '' : '';
+    if (e.skipped) { tr.push([w.date, w.dayName, e.name, e.muscle, KIND[e.kind || 'reps'], '', null, null, null, 'нет', skip, e.note || '', wn]); continue; }
+    e.sets.forEach((st, i) => {
+      tr.push([w.date, w.dayName, e.name, e.muscle, KIND[e.kind || 'reps'], i + 1, st.w, st.reps, st.rir, st.done ? 'да' : 'нет', '', i === 0 ? e.note || '' : '', i === 0 ? wn : '']);
+    });
+  }
   const ms = (await all('metrics')).sort((a, b) => a.date.localeCompare(b.date));
   const mt = [['Дата', 'Вес, кг', 'Шаги', 'Сон, ч', 'Талия, см'], ...ms.map(m => [m.date, m.weight, m.steps, m.sleep, m.waist])];
   return { workouts: toCSV(tr), metrics: toCSV(mt) };

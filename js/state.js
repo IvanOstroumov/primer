@@ -16,6 +16,8 @@ export async function loadState() {
     state.program = defaultProgram();
     await setKV('program', state.program);
   }
+  // Миграция: подтягивания в старой программе → тип «собственный вес»
+  for (const d of state.program.days) for (const e of d.exercises) if (!e.kind && e.id === 'pullup') { e.kind = 'bw'; await setKV('program', state.program); }
   const saved = await getKV('settings', {});
   state.settings = { ...DEFAULT_SETTINGS, ...saved, goals: { ...DEFAULT_SETTINGS.goals, ...(saved.goals || {}) } };
 }
@@ -54,27 +56,3 @@ export function workoutDuration(w) {
   if (ts.length < 2) return null;
   return Math.round((Math.max(...ts) - Math.min(...ts)) / 60000);
 }
-
-const before = (a, b) => a.date < b.date || (a.date === b.date && (a.created || '') < (b.created || ''));
-const epley = (wt, r) => (wt && r ? wt * (1 + r / 30) : 0);
-
-// Рекорды: индексы подходов упражнения, превзошедших все прошлые тренировки по весу или оценке 1ПМ.
-// Если прошлых выполненных подходов нет, рекордом ничего не считается.
-export function prSets(workouts, w, ex) {
-  let bw = -Infinity, be = -Infinity, prior = false;
-  for (const o of workouts) {
-    if (o.id === w.id || !before(o, w)) continue;
-    const e = o.ex.find(x => x.id === ex.id); if (!e) continue;
-    for (const s of e.sets) if (s.done && s.w != null && s.reps) { prior = true; bw = Math.max(bw, s.w); be = Math.max(be, epley(s.w, s.reps)); }
-  }
-  const out = new Set();
-  if (!prior) return out;
-  ex.sets.forEach((s, i) => {
-    if (!s.done || s.w == null || !s.reps) return;
-    const e = epley(s.w, s.reps);
-    if (s.w > bw || e > be + 1e-9) out.add(i);
-    bw = Math.max(bw, s.w); be = Math.max(be, e);
-  });
-  return out;
-}
-export const prCount = (workouts, w) => w.ex.reduce((a, e) => a + prSets(workouts, w, e).size, 0);
