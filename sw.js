@@ -1,6 +1,6 @@
 // Сервис-воркер: всё приложение кэшируется при установке и работает офлайн.
 // При изменении файлов увеличьте VERSION.
-const VERSION = 'zal-v1';
+const VERSION = 'zal-v2';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'content/research.md',
   'js/app.js', 'js/db.js', 'js/util.js', 'js/state.js', 'js/seed.js', 'js/timer.js', 'js/charts.js', 'js/photos.js', 'js/md.js',
@@ -26,4 +26,10 @@ self.addEventListener('fetch', e => {
     return;
   }
   e.respondWith(caches.match(req, { ignoreSearch: true }).then(r => r || fetch(req)));
+});
+
+// Нажатие на уведомление таймера — вернуться в приложение
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => cs[0] ? cs[0].focus() : self.clients.openWindow('./#today')));
 });

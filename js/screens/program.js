@@ -1,6 +1,7 @@
 // Редактор программы. История тренировок хранит свои снимки, поэтому правки её не ломают.
 import { h, uid, range, restLabel, toast, WEEKDAYS_SHORT } from '../util.js';
-import { state, saveProgram } from '../state.js';
+import { state, saveProgram, allWorkouts } from '../state.js';
+import { isoDate, weekStart, addDays, fmtDate } from '../util.js';
 import { MUSCLES, defaultProgram } from '../seed.js';
 
 let openEx = null;
@@ -20,14 +21,10 @@ export function renderProgram(root) {
 
   root.append(h('header', { class: 'page-head' }, h('div', { class: 'eyebrow' }, 'Дни, упражнения, подходы'), h('h1', {}, 'Программа')));
 
-  // Недельный объём
-  const ws = weeklySets(P);
-  root.append(h('section', { class: 'card' },
-    h('h2', { class: 'card-h' }, 'Прямые подходы в неделю'),
-    ws.length ? h('div', { class: 'vol' }, ws.map(([k, v]) => h('div', { class: 'vol-row' },
-      h('span', {}, k), h('div', { class: 'vol-bar' }, h('i', { style: { width: Math.min(100, v / Math.max(...ws.map(x => x[1])) * 100) + '%' } })), h('b', {}, v))))
-      : h('p', { class: 'muted' }, 'Нет упражнений'),
-    h('p', { class: 'muted small' }, 'Считается автоматически: сумма подходов по тегу мышцы. Косвенный объём не учитывается.')));
+  // Недельный объём: план из программы + сделано за текущую неделю (Пн–Вс) по журналу
+  const volBox = h('section', { class: 'card' });
+  root.append(volBox);
+  fillVolume(volBox, P);
 
   // Вкладки дней
   root.append(h('div', { class: 'chips' },
@@ -140,4 +137,27 @@ function move(day, i, d) {
   if (a[j]?.ssNext) a[j].ssNext = false;
   if (j > 0 && a[j - 1]?.ssNext && j - 1 !== i) a[j - 1].ssNext = false;
   a.splice(j, 0, a.splice(i, 1)[0]);
+}
+
+async function fillVolume(box, P) {
+  const today = isoDate(), ws = weekStart(today);
+  const done = {};
+  for (const w of await allWorkouts()) {
+    if (w.date < ws || w.date > addDays(ws, 6)) continue;
+    for (const e of w.ex) done[e.muscle] = (done[e.muscle] || 0) + e.sets.filter(s => s.done).length;
+  }
+  const plan = Object.fromEntries(weeklySets(P));
+  const keys = [...new Set([...Object.keys(plan), ...Object.keys(done)])].sort((a, b) => (plan[b] || 0) - (plan[a] || 0) || (done[b] || 0) - (done[a] || 0));
+  const max = Math.max(1, ...keys.map(k => Math.max(plan[k] || 0, done[k] || 0)));
+  box.replaceChildren(
+    h('h2', { class: 'card-h' }, 'Прямые подходы в неделю'),
+    h('p', { class: 'muted small', style: { marginTop: '-6px' } }, `Сделано / по программе · неделя ${fmtDate(ws)} – ${fmtDate(addDays(ws, 6))}`),
+    keys.length ? h('div', { class: 'vol' }, keys.map(k => h('div', { class: 'vol-row v2' },
+      h('span', {}, k),
+      h('div', { class: 'vol-bar v2' },
+        h('i', { style: { width: (plan[k] || 0) / max * 100 + '%' } }),
+        h('i', { class: 'done', style: { width: Math.min(100, (done[k] || 0) / max * 100) + '%' } })),
+      h('b', {}, String(done[k] || 0), h('small', {}, ' / ' + (plan[k] || 0))))))
+      : h('p', { class: 'muted' }, 'Нет упражнений'),
+    h('p', { class: 'muted small' }, 'План считается по тегу мышцы из программы, «сделано» — по отмеченным подходам в журнале (включая разовые упражнения). Косвенный объём не учитывается.'));
 }

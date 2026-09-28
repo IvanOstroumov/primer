@@ -5,6 +5,7 @@ export function h(tag, attrs = {}, ...kids) {
     if (v == null || v === false) continue;
     if (k === 'class') el.className = v;
     else if (k === 'html') el.innerHTML = v;
+    else if (k === 'value') el.value = v;
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
     else if (k in el && typeof v !== 'string') el[k] = v;
@@ -92,3 +93,21 @@ export function plural(n, one, few, many) {
 
 // Эпли: оценка 1ПМ
 export const e1rm = (w, r) => (w && r ? w * (1 + r / 30) : 0);
+
+// Сообщение с кнопкой «Отменить» (5 секунд)
+export function undoToast(msg, undo) {
+  let t = document.getElementById('undo');
+  if (!t) { t = h('div', { id: 'undo', role: 'status' }); document.body.append(t); }
+  clearTimeout(t._h);
+  t.replaceChildren(h('span', {}, msg), h('button', {
+    type: 'button', onclick: () => { clearTimeout(t._h); t.classList.remove('show'); undo(); },
+  }, '↶ Отменить'));
+  t.classList.add('show');
+  t._h = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+export function fmtDuration(min) {
+  if (min == null) return '';
+  const hh = Math.floor(min / 60), mm = min % 60;
+  return hh ? `${hh} ч ${mm} мин` : `${mm} мин`;
+}
