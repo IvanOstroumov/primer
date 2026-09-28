@@ -1,6 +1,6 @@
 // Сервис-воркер: всё приложение кэшируется при установке и работает офлайн.
 // При изменении файлов увеличьте VERSION.
-const VERSION = 'zal-v5';
+const VERSION = 'zal-v6';
 const ASSETS = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'content/research.md',
   'js/app.js', 'js/db.js', 'js/load.js', 'js/screens/exercise.js', 'js/util.js', 'js/state.js', 'js/seed.js', 'js/timer.js', 'js/charts.js', 'js/photos.js', 'js/md.js',
