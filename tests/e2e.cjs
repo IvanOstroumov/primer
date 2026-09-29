@@ -18,7 +18,9 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
 
   await p.goto(URL + '#today');
   await p.waitForSelector('.ex');
-  ok((await p.textContent('h1')).includes('Верх A'), 'понедельник → Верх A');
+  const wdNames = { 1: 'Верх A', 2: 'Низ', 3: 'Верх B', 4: 'Верх B', 5: 'Руки и дельты', 6: 'Верх A', 0: 'Верх A' };
+  ok((await p.textContent('h1')).includes(wdNames[new Date().getDay()]), 'день по расписанию');
+  await p.goto(URL + '#today/upperA'); await p.waitForSelector('.ex');
   await p.screenshot({ path: OUT + '/01-today-empty.png', fullPage: true });
   // Прошлая тренировка неделю назад (для «прошлого раза», заметки и рекордов)
   await p.evaluate(async () => {
@@ -31,7 +33,7 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
         sets: [{ w: 20, reps: 8, rir: 2, done: true, at: iso + 'T10:00:00Z' }, { w: 20, reps: 8, rir: 2, done: true, at: iso + 'T10:41:00Z' }] }] });
     await new Promise(r => t.oncomplete = r);
   });
-  await p.reload(); await p.waitForSelector('.ex');
+  await p.goto(URL + '#today/upperA'); await p.reload(); await p.waitForSelector('.ex');
   ok((await p.textContent('.last-note')).includes('скамья 30°'), 'заметка прошлого раза видна');
   ok(await p.locator('.ex').first().locator('.cell input').nth(0).inputValue() === '20', 'предзаполнено из прошлого раза');
   await noOverflow('today');
@@ -182,7 +184,7 @@ const ok = (c, m) => { if (!c) { console.log('FAIL', m); process.exitCode = 1; }
   await p.goto(URL + '#history'); await p.waitForSelector('.hist-item');
   await p.goto(URL + '#body/photos'); await p.waitForSelector('.ph');
   ok(await p.locator('.ph').count() === 2, 'импорт: фото восстановлены');
-  await p.goto(URL + '#today'); await p.waitForSelector('.ex');
+  await p.goto(URL + '#today/upperA'); await p.waitForSelector('.ex');
   ok(await p.locator('.set.done').count() === 1, 'импорт: подход восстановлен');
 
   // Завершить тренировку
