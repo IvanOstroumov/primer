@@ -1,8 +1,8 @@
 // Сервис-воркер: всё приложение кэшируется при установке и работает офлайн.
 // При изменении файлов увеличьте VERSION.
-const VERSION = 'zal-v7';
+const VERSION = 'zal-v8';
 const ASSETS = [
-  './', 'index.html', 'manifest.webmanifest', 'css/app.css', 'content/research.md',
+  './', 'manifest.webmanifest', 'css/app.css', 'content/research.md',
   'js/app.js', 'js/db.js', 'js/load.js', 'js/screens/exercise.js', 'js/util.js', 'js/state.js', 'js/seed.js', 'js/timer.js', 'js/charts.js', 'js/photos.js', 'js/md.js',
   'js/screens/today.js', 'js/screens/body.js', 'js/screens/ramp.js',
   'js/screens/plan.js', 'js/screens/research.js', 'js/screens/settings.js',
@@ -35,15 +35,23 @@ self.addEventListener('activate', e => {
 // Всегда есть сетевой запасной путь: если кэш промахнулся или сам упал
 // с ошибкой, идём в сеть; если и сеть недоступна — отдаём offline-страницу
 // вместо того, чтобы дать промису отклониться (это и даёт ERR_FAILED).
+// Cloudflare Pages перенаправляет /index.html → / (308). Перенаправленный ответ нельзя
+// отдавать на навигацию — Chrome показывает ERR_FAILED. Поэтому страницу кэшируем как './'
+// и любой ответ с флагом redirected пересобираем в «чистый».
+function clean(r) {
+  if (!r || !r.redirected) return r;
+  return r.blob().then(body => new Response(body, { status: r.status, statusText: r.statusText, headers: r.headers }));
+}
+
 async function handle(req, navigate) {
   try {
-    const cached = await caches.match(navigate ? 'index.html' : req, navigate ? undefined : { ignoreSearch: true });
-    if (cached) return cached;
+    const cached = await caches.match(navigate ? './' : req, navigate ? undefined : { ignoreSearch: true });
+    if (cached) return await clean(cached);
   } catch { /* кэш недоступен — идём в сеть */ }
   try {
-    return await fetch(req);
+    return await clean(await fetch(req));
   } catch {
-    if (navigate) { const idx = await caches.match('index.html'); if (idx) return idx; }
+    if (navigate) { const idx = await caches.match('./'); if (idx) return await clean(idx); }
     return new Response('Офлайн: страница ещё не была загружена.', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   }
 }
